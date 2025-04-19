@@ -124,4 +124,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Author
 
-Created by [Your Name] to help VGU dormitory residents split bills fairly.
+Created by Tuan Ha to help VGU dormitory residents split bills fairly.
