@@ -1,29 +1,37 @@
 from itertools import combinations
 
-def find_common_and_unique_elements(sets):
+def compute_set_ratios(sets, original_ratios):
     n = len(sets)
     result = {}
 
-    # Find elements unique to each set
-    for i in range(n):
-        other_sets = sets[:i] + sets[i+1:]
-        unique = sets[i].copy()
-        for s in other_sets:
-            unique -= s
-        result[f"only_in_set_{i+1}"] = [unique, 1]
-
-    # Find elements common to combinations of sets
-    for r in range(2, n+1):
+    # Generate all possible combinations of sets
+    for r in range(1, n + 1):
         for indices in combinations(range(n), r):
+            # Step 1: Find common elements in the selected sets
             common = set.intersection(*[sets[i] for i in indices])
             other_indices = set(range(n)) - set(indices)
+            
+            # Step 2: Remove elements from other sets
             for other_i in other_indices:
                 common -= sets[other_i]
+            
+            # Step 3: Generate the key (e.g., "common_in_set_1_set_3")
             key = "common_in_" + "_".join(f"set_{i+1}" for i in indices)
-            result[key] = common
-
+            
+            # Step 4: Adjust the ratio list for the current combination
+            included_ratios = [original_ratios[i] for i in indices]
+            total = sum(included_ratios)
+            keys = [str(i+1) for i in indices]
+            adjusted_ratios = [ratio / total for ratio in included_ratios]
+            my_dict = {k: v for k, v in zip(keys, adjusted_ratios)}  # Combine lists into a dict
+            
+            # Step 5: Store the common elements and adjusted ratios
+            result[key] = {
+                "elements": common,
+                "ratios": my_dict
+            }
+    
     return result
-
 def list_to_set(lists):
     sets = []
     for lst in lists:
@@ -68,11 +76,15 @@ def duration_to_list(duration_list):                        #l1                 
 
 # remember to handle cases where one person doesnt use electricity for the whole month
 
-def split(total, roomates):
+def main():
+    total = int(input("Enter the total electricity bill of this month: "))
+    roomates = int(input("Enter the number of roomates: "))
+    days_in_month = int(input("Enter the number days of this month: "))
+    pay_per_day = float(total) / float(days_in_month)
+
     ratio_list = []
     bill_list = []
     duration_list = []
-    main_dict = {}
     # Get each person's ratio (depending on who use more electricity)
     for i in range(roomates):
         ratio_list.append(float(input(f"Enter ratio for person {i+1}: ")))
@@ -83,15 +95,21 @@ def split(total, roomates):
     print("If a person has multiple durations, separate them using a comma: dd-dd,dd-dd,dd-dd (for example: 01-10,15-31)")
     for i in range(roomates):
         duration_list.append(input(f"Enter range of days for person {i+1}: "))
-        # Get all possible 1,2,3,...n-element combinations of a list
+
 
     
     my_set = list_to_set(duration_to_list(duration_list))
-    result = find_common_and_unique_elements(my_set)
-    for k, v in result.items():
-        print(f"{k}: {v}")
+    result = compute_set_ratios(my_set, ratio_list)
+    print(result)
+    for i in range(roomates):
+        topay = 0
+        for k, v in result.items():
+            days = len(v["elements"])
+            ratios = v["ratios"]
+            if str(i+1) in k:
+                topay += pay_per_day * ratios[str(i+1)] * days
+        bill_list.append(topay)
 
+    print(bill_list)
 
-    return bill_list
-
-split(100,3)
+main()
