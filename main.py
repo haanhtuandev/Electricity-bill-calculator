@@ -2,6 +2,11 @@ from itertools import combinations
 from colorama import Fore, Style, init
 import os
 from art import *
+import streamlit as st
+
+
+st.text("Advanced Electricity Bill Splitter")
+
 # Initialize colorama
 init(autoreset=True)
 
