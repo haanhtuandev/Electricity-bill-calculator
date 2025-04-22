@@ -1,14 +1,21 @@
 import streamlit as st
 from itertools import combinations
+import calendar
+from datetime import datetime
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Electricity Bill Splitter", layout="centered")
 
-st.title("⚡ Fair Electricity Bill Splitter")
-st.markdown("Split your **dorm electricity bill** based on how much each person **used** and **how long** they stayed.")
+# --------------- Title & Intro ---------------
+st.markdown(
+    "<h1 style='text-align: center;'>⚡ Smart Electricity Bill Splitter</h1>"
+    "<p style='text-align: center; color: gray;'>Split bills fairly by usage and stay duration — without spreadsheets!</p>",
+    unsafe_allow_html=True
+)
 
 st.divider()
 
-# ------------------ Helper Functions ------------------
+# --------------- Helper Functions ---------------
 def compute_set_ratios(sets, original_ratios):
     n = len(sets)
     result = {}
@@ -66,27 +73,56 @@ def duration_to_list(duration_list):
                 range_list.append([])
     return range_list
 
-# ------------------ Step 1: General Info ------------------
-with st.expander("📝 Step 1: General Information", expanded=True):
-    total = st.number_input("💰 Total electricity bill (VND)", min_value=0.0)
-    roommates = st.number_input("👥 Number of roommates", min_value=1, step=1)
-    days_in_month = st.slider("📅 Number of days in month", 1, 31, 30)
-    pay_per_day = total / days_in_month if days_in_month else 0
-    st.info(f"💡 Daily cost per person (base): **{pay_per_day:.2f} VND**")
+# --------------- Step 1: General Info ---------------
+with st.container():
+    st.header("📝 Step 1: Bill Basics")
+    col1, col2 = st.columns(2)
+    with col1:
+        total = st.number_input("💰 Total electricity bill (VND)", min_value=0.0)
+    with col2:
+        roommates = st.number_input("👥 Number of roommates", min_value=1, step=1)
 
-# ------------------ Step 2: Usage Ratios ------------------
-with st.expander("⚖️ Step 2: Usage Ratios", expanded=True):
-    st.markdown("Enter how much electricity each person **tends to use**.")
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_month = st.selectbox("📅 Month", range(1, 13), format_func=lambda x: calendar.month_name[x])
+    with col2:
+        selected_year = st.number_input("📆 Year", min_value=2000, max_value=2100, value=datetime.now().year)
+
+    days_in_month = calendar.monthrange(selected_year, selected_month)[1]
+    pay_per_day = total / days_in_month if days_in_month else 0
+
+    st.success(f"📆 {calendar.month_name[selected_month]} {selected_year} has **{days_in_month} days**.")
+    st.info(f"💡 Base cost per day: **{pay_per_day:,.2f} VND**")
+
+# --------------- Step 2: Usage Ratios ---------------
+with st.container():
+    st.header("⚖️ Step 2: Usage Ratios")
+    st.markdown("Enter your **electricity usage share**. Leave the last person blank to autofill.")
+
     ratio_list = []
     cols = st.columns(int(roommates))
     for i in range(int(roommates)):
         with cols[i]:
-            ratio = st.number_input(f"Person {i+1}", min_value=0.1, step=0.1, key=f"ratio_{i}")
+            if i == int(roommates) - 1:
+                ratio = st.number_input(f"Person {i+1} (auto)", min_value=0.0, max_value=1.0, step=0.01, key=f"ratio_{i}")
+            else:
+                ratio = st.number_input(f"Person {i+1}", min_value=0.0, max_value=1.0, step=0.01, key=f"ratio_{i}")
             ratio_list.append(ratio)
 
-# ------------------ Step 3: Duration of Stay ------------------
-with st.expander("📆 Step 3: Duration of Stay", expanded=True):
-    st.markdown("Enter days like `01-15`, or multiple ranges like `01-10,20-30`.")
+    if len(ratio_list) > 1:
+        filled = ratio_list[:-1]
+        if all(r > 0 for r in filled) and ratio_list[-1] == 0.0:
+            last = round(1.0 - sum(filled), 3)
+            if last >= 0:
+                ratio_list[-1] = last
+                st.success(f"✅ Auto-filled last ratio: **{last:.3f}**")
+            else:
+                st.error("❌ Ratios exceed 1.0 — please fix.")
+
+# --------------- Step 3: Duration of Stay ---------------
+with st.container():
+    st.header("📆 Step 3: Duration of Stay")
+    st.markdown("Use format `01-15` or multiple like `01-10,20-30`.")
     duration_list = []
     cols = st.columns(int(roommates))
     for i in range(int(roommates)):
@@ -94,9 +130,9 @@ with st.expander("📆 Step 3: Duration of Stay", expanded=True):
             duration = st.text_input(f"Person {i+1}", key=f"duration_{i}")
             duration_list.append(duration)
 
-# ------------------ Step 4: Calculate ------------------
+# --------------- Step 4: Calculate & Visualize ---------------
 st.divider()
-if st.button("🧮 Calculate Bill Distribution"):
+if st.button("🧮 Calculate & Show Results"):
     my_set = list_to_set(duration_to_list(duration_list))
     result = compute_set_ratios(my_set, ratio_list)
 
@@ -113,27 +149,34 @@ if st.button("🧮 Calculate Bill Distribution"):
     total_calculated = sum(bill_list)
     discrepancy = total - total_calculated
 
-    st.success("✅ Calculation complete!")
     st.subheader("💸 Bill Breakdown")
     cols = st.columns(int(roommates))
     for i in range(int(roommates)):
         with cols[i]:
-            st.metric(label=f"Person {i+1}", value=f"{bill_list[i]:,.2f} VND")
+            st.metric(label=f"Person {i+1}", value=f"{bill_list[i]}")
 
-    st.markdown("---")
     st.markdown(f"**🧾 Original Total:** {total:,.2f} VND")
     st.markdown(f"**📊 Calculated Total:** {total_calculated:,.2f} VND")
 
     if abs(discrepancy) > 0.01:
         st.warning(f"⚠️ Discrepancy of {discrepancy:.2f} VND due to rounding. Adjusting...")
-
         weights = [bill / total_calculated for bill in bill_list]
         adjustments = [round(discrepancy * w, 2) for w in weights]
         adjustments[-1] += discrepancy - sum(adjustments)
         bill_list = [a + b for a, b in zip(bill_list, adjustments)]
+        st.info("🔧 Adjusted final values:")
 
-        st.subheader("🔧 Adjusted Amounts")
-        cols = st.columns(int(roommates))
-        for i in range(int(roommates)):
-            with cols[i]:
-                st.metric(label=f"Person {i+1}", value=f"{bill_list[i]:,.2f} VND (adjusted)")
+    # 📊 PIE CHART VISUALIZATION
+    st.subheader("📈 Share Visualization")
+    labels = [f"Person {i+1}" for i in range(int(roommates))]
+    fig = go.Figure(
+        data=[go.Pie(
+            labels=labels,
+            values=bill_list,
+            hole=0.4,
+            textinfo="label+percent",
+            marker=dict(line=dict(color='#000000', width=1))
+        )]
+    )
+    fig.update_layout(margin=dict(t=0, b=0, l=0, r=0))
+    st.plotly_chart(fig, use_container_width=True)
